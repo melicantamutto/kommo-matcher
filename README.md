@@ -43,6 +43,17 @@ El archivo original + estas columnas:
 
 ## Cómo correrlo
 
+### Mac (fácil, doble clic)
+
+1. Descargá el proyecto (botón verde **Code → Download ZIP**) y descomprimilo.
+2. Doble clic en **`iniciar.command`**.
+
+La primera vez prepara todo solo (puede pedir permiso de macOS para abrir el
+archivo: clic derecho → Abrir). Después abre la app en el navegador. Los datos
+nunca salen de tu computadora.
+
+### Manual (cualquier sistema)
+
 Necesitás Python 3.11+.
 
 ```bash
