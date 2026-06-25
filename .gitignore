@@ -1,0 +1,24 @@
+# NUNCA versionar datos personales / bases reales
+*.xlsx
+*.xlsm
+*.csv
+Resultado_con_IDs.csv
+
+# Excepción: ejemplos sintéticos sin datos personales
+!examples/*.csv
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+*.egg-info/
+build/
+dist/
+
+# Sistema
+.DS_Store
+
+# Tooling interno de agentes
+.atl/

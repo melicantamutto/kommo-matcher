@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Kommo Matcher</title>
+  <style>
+    :root { --bg:#0f172a; --card:#1e293b; --line:#334155; --txt:#e2e8f0; --muted:#94a3b8;
+            --accent:#38bdf8; --ok:#22c55e; --warn:#f59e0b; --new:#64748b; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: system-ui, sans-serif; background:var(--bg); color:var(--txt); line-height:1.5; }
+    header { padding:24px; border-bottom:1px solid var(--line); }
+    header h1 { margin:0; font-size:1.4rem; }
+    header p { margin:4px 0 0; color:var(--muted); font-size:.9rem; }
+    main { max-width:980px; margin:0 auto; padding:24px; }
+    .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:20px; margin-bottom:20px; }
+    .card h2 { margin:0 0 14px; font-size:1.05rem; }
+    .step { color:var(--accent); font-weight:700; margin-right:6px; }
+    label { display:block; font-size:.85rem; color:var(--muted); margin:10px 0 4px; }
+    input[type=file], select { width:100%; padding:8px 10px; background:#0b1220; color:var(--txt);
+            border:1px solid var(--line); border-radius:8px; font-size:.9rem; }
+    button { background:var(--accent); color:#03263a; border:0; padding:11px 20px; border-radius:8px;
+            font-weight:700; cursor:pointer; font-size:.95rem; }
+    button:disabled { opacity:.5; cursor:not-allowed; }
+    button.ghost { background:transparent; color:var(--accent); border:1px solid var(--accent); }
+    .hidden { display:none; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:14px; }
+    .filebox { border:1px dashed var(--line); border-radius:10px; padding:14px; }
+    .filebox h3 { margin:0 0 2px; font-size:.95rem; }
+    .filebox small { color:var(--muted); }
+    .summary { display:flex; flex-wrap:wrap; gap:12px; }
+    .pill { border-radius:10px; padding:12px 16px; min-width:120px; border:1px solid var(--line); }
+    .pill .n { font-size:1.6rem; font-weight:700; }
+    .pill .l { font-size:.8rem; color:var(--muted); }
+    .pill.ok { border-color:var(--ok); } .pill.ok .n { color:var(--ok); }
+    .pill.warn { border-color:var(--warn); } .pill.warn .n { color:var(--warn); }
+    .pill.new { border-color:var(--new); } .pill.new .n { color:#cbd5e1; }
+    table { width:100%; border-collapse:collapse; font-size:.85rem; }
+    th, td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
+    th { color:var(--muted); font-weight:600; }
+    .tag { font-size:.72rem; padding:2px 8px; border-radius:999px; white-space:nowrap; }
+    .tag.dato { background:#3b2f0b; color:var(--warn); }
+    .tag.ident { background:#3b0b0b; color:#fca5a5; }
+    .disc { color:var(--muted); font-size:.8rem; }
+    .disc b { color:var(--txt); }
+    .err { color:#fca5a5; font-size:.85rem; margin-top:8px; }
+    .scroll { overflow-x:auto; }
+    .note { color:var(--muted); font-size:.82rem; margin-top:10px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Kommo Matcher</h1>
+    <p>Asigná el ID de Kommo a tu base antes de importar. Sin cruzar contactos.</p>
+  </header>
+  <main>
+    <section class="card">
+      <h2><span class="step">1.</span>Cargá los archivos</h2>
+      <div class="grid">
+        <div class="filebox">
+          <h3>Contactos de Kommo</h3>
+          <small>El export con la columna ID. Obligatorio.</small>
+          <input type="file" id="f-contactos" accept=".csv,.xlsx" />
+        </div>
+        <div class="filebox">
+          <h3>Leads de Kommo</h3>
+          <small>Opcional. Para avisar si el lead ya existe.</small>
+          <input type="file" id="f-leads" accept=".csv,.xlsx" />
+        </div>
+        <div class="filebox">
+          <h3>Base a importar</h3>
+          <small>Los datos nuevos a subir. Obligatorio.</small>
+          <input type="file" id="f-importar" accept=".csv,.xlsx" />
+        </div>
+      </div>
+      <div style="margin-top:16px">
+        <button id="btn-analyze">Analizar columnas</button>
+      </div>
+      <div id="analyze-err" class="err hidden"></div>
+    </section>
+
+    <section class="card hidden" id="map-card">
+      <h2><span class="step">2.</span>Confirmá las columnas</h2>
+      <p class="note">Pre-seleccionamos la columna con más datos. Revisá que el teléfono y el nombre sean los correctos.</p>
+      <div id="map-area"></div>
+      <div style="margin-top:16px">
+        <button id="btn-match">Ejecutar match</button>
+      </div>
+      <div id="match-err" class="err hidden"></div>
+    </section>
+
+    <section class="card hidden" id="result-card">
+      <h2><span class="step">3.</span>Resultado</h2>
+      <div class="summary" id="summary"></div>
+      <p class="note" id="leads-note"></p>
+      <div style="margin:16px 0">
+        <a id="download" href="#"><button>Descargar CSV con IDs</button></a>
+      </div>
+      <h3 id="review-title" style="font-size:.95rem"></h3>
+      <div class="scroll"><table id="review-table"></table></div>
+    </section>
+  </main>
+
+  <script>
+    const FIELD_LABELS = { id:"Columna ID", dni:"DNI", phone:"Teléfono", name:"Nombre", birthdate:"Fecha de nacimiento" };
+    let sessionId = null;
+    let analysis = null;
+
+    const $ = (id) => document.getElementById(id);
+
+    async function analyze() {
+      const contactos = $("f-contactos").files[0];
+      const importar = $("f-importar").files[0];
+      const leads = $("f-leads").files[0];
+      const err = $("analyze-err");
+      err.classList.add("hidden");
+      if (!contactos || !importar) {
+        err.textContent = "Faltan archivos: Contactos y Base a importar son obligatorios.";
+        err.classList.remove("hidden");
+        return;
+      }
+      const fd = new FormData();
+      fd.append("contactos", contactos);
+      fd.append("importar", importar);
+      if (leads) fd.append("leads", leads);
+
+      $("btn-analyze").disabled = true;
+      try {
+        const res = await fetch("/analyze", { method:"POST", body:fd });
+        if (!res.ok) throw new Error((await res.json()).detail || "Error al analizar");
+        const data = await res.json();
+        sessionId = data.session_id;
+        analysis = data.files;
+        renderMapping();
+      } catch (e) {
+        err.textContent = e.message;
+        err.classList.remove("hidden");
+      } finally {
+        $("btn-analyze").disabled = false;
+      }
+    }
+
+    function colOptions(file, selected) {
+      const empty = `<option value="">— ninguna —</option>`;
+      const opts = file.columns.map(c =>
+        `<option value="${esc(c.name)}" ${c.name===selected?"selected":""}>` +
+        `${esc(c.name)} (${c.filled}/${c.total})</option>`).join("");
+      return empty + opts;
+    }
+
+    function renderMapping() {
+      const order = ["contactos","leads","importar"];
+      const titles = { contactos:"Contactos de Kommo", leads:"Leads de Kommo", importar:"Base a importar" };
+      let html = "";
+      for (const role of order) {
+        const file = analysis[role];
+        if (!file) continue;
+        const fields = role==="importar" ? ["dni","phone","name","birthdate"] : ["id","dni","phone","name","birthdate"];
+        html += `<div class="filebox" style="margin-bottom:14px">
+          <h3>${titles[role]} <small>· ${esc(file.filename)} · ${file.rows} filas</small></h3>
+          <div class="grid">`;
+        for (const f of fields) {
+          html += `<div><label>${FIELD_LABELS[f]}</label>
+            <select data-role="${role}" data-field="${f}">${colOptions(file, file.suggestions[f])}</select></div>`;
+        }
+        html += `</div></div>`;
+      }
+      $("map-area").innerHTML = html;
+      $("map-card").classList.remove("hidden");
+      $("map-card").scrollIntoView({ behavior:"smooth" });
+    }
+
+    function collectMappings() {
+      const mappings = {};
+      document.querySelectorAll("#map-area select").forEach(sel => {
+        const { role, field } = sel.dataset;
+        mappings[role] = mappings[role] || {};
+        mappings[role][field] = sel.value;
+      });
+      return mappings;
+    }
+
+    async function runMatch() {
+      const err = $("match-err");
+      err.classList.add("hidden");
+      $("btn-match").disabled = true;
+      try {
+        const res = await fetch("/match", {
+          method:"POST", headers:{ "Content-Type":"application/json" },
+          body: JSON.stringify({ session_id: sessionId, mappings: collectMappings() })
+        });
+        if (!res.ok) throw new Error((await res.json()).detail || "Error al ejecutar");
+        renderResult(await res.json());
+      } catch (e) {
+        err.textContent = e.message;
+        err.classList.remove("hidden");
+      } finally {
+        $("btn-match").disabled = false;
+      }
+    }
+
+    function pill(n, label, cls) {
+      return `<div class="pill ${cls}"><div class="n">${n}</div><div class="l">${label}</div></div>`;
+    }
+
+    function renderResult(data) {
+      const s = data.summary;
+      $("summary").innerHTML =
+        pill(s.ok, "Match limpio", "ok") +
+        pill(s.revisar_dato, "Revisar dato", "warn") +
+        pill(s.revisar_identidad, "Revisar identidad", "warn") +
+        pill(s.nuevo, "Nuevos", "new");
+      $("leads-note").textContent = data.leads_existentes
+        ? `${data.leads_existentes} lead(s) ya existen en Kommo (se marcaron).`
+        : "Ningún lead coincidió con leads existentes.";
+      $("download").href = data.download_url;
+
+      const rows = data.review;
+      $("review-title").textContent = rows.length
+        ? `${rows.length} fila(s) para revisar` : "Nada para revisar. Todo resuelto.";
+      let html = `<tr><th>Fila</th><th>Nombre</th><th>Estado</th><th>Motivo</th><th>Detalle</th></tr>`;
+      for (const r of rows) {
+        const tag = r.estado==="revisar_dato"
+          ? `<span class="tag dato">revisar dato</span>`
+          : `<span class="tag ident">revisar identidad</span>`;
+        let detalle = "";
+        if (r.discrepancias.length) {
+          detalle = r.discrepancias.map(d =>
+            `<div class="disc"><b>${esc(d.campo)}</b>: Kommo "${esc(d.kommo)}" vs nuevo "${esc(d.nuevo)}"</div>`).join("");
+        } else if (r.candidatos.length) {
+          detalle = `<div class="disc">${esc(r.detalle)} · candidatos: ${r.candidatos.map(esc).join(", ")}</div>`;
+        } else {
+          detalle = `<div class="disc">${esc(r.detalle)}</div>`;
+        }
+        html += `<tr><td>${r.fila}</td><td>${esc(r.nombre)}</td><td>${tag}</td>
+                 <td>${esc(r.motivo)}</td><td>${detalle}</td></tr>`;
+      }
+      $("review-table").innerHTML = html;
+      $("result-card").classList.remove("hidden");
+      $("result-card").scrollIntoView({ behavior:"smooth" });
+    }
+
+    function esc(s) {
+      return String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));
+    }
+
+    $("btn-analyze").addEventListener("click", analyze);
+    $("btn-match").addEventListener("click", runMatch);
+  </script>
+</body>
+</html>
